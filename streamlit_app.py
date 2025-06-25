@@ -113,6 +113,7 @@ for resident in junior_residents + senior_residents:
 
     # Process vacation entries
     vacation_list = []
+        single_day_list = []
     for entry in vacation_input.split(','):
         entry = entry.strip()
         if not entry:
@@ -123,7 +124,14 @@ for resident in junior_residents + senior_residents:
         else:
             vacation_list.append(datetime.strptime(entry, "%Y-%m-%d"))
     if vacation_list:
-        vacation_dict[resident] = vacation_list
+                # Combine ranges and single days into a unified list of tuples
+        combined_vacations = []
+        for v in vacation_list:
+            if isinstance(v, datetime):
+                combined_vacations.append((v, v))
+            else:
+                combined_vacations.append(v)
+        vacation_dict[resident] = combined_vacations
 
     # Process preferences
     preferred_days = [d.strip() for d in preference_input.split(',') if d.strip()]
@@ -143,3 +151,4 @@ if st.button("Generate Schedule"):
 
     csv_counts = counts_df.to_csv(index=False).encode('utf-8')
     st.download_button("Download Call Counts as CSV", csv_counts, "call_counts.csv", "text/csv")
+
