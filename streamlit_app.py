@@ -9,7 +9,7 @@ import random
 from datetime import datetime, timedelta
 import streamlit as st
 
-def generate_schedule(junior_residents, senior_residents, night_float, start_date, num_days, vacation_dict=None, specific_requests=None):
+def generate_schedule(junior_residents, senior_residents, night_float, start_date, num_days, vacation_dict=None, specific_requests=None, enforce_no_back_to_back=True):
     if vacation_dict is None:
         vacation_dict = {}
     if specific_requests is None:
@@ -56,7 +56,10 @@ def generate_schedule(junior_residents, senior_residents, night_float, start_dat
                 weekend_counts[junior_day] += 2
         elif weekday == 6:  # Sunday - night float starts
             preferred = [r for r in available_juniors if date_str in specific_requests.get(r, {}).get('preferred_days', [])]
-            junior_day = random.choice(preferred or available_juniors)
+            filtered_juniors = [r for r in preferred or available_juniors if not (enforce_no_back_to_back and r == last_assigned['junior_day'])]
+            if not filtered_juniors:
+                filtered_juniors = preferred or available_juniors
+            junior_day = random.choice(filtered_juniors)
             junior_night = night_float
             junior_shift_counts[junior_day] += 1
             if is_weekend:
@@ -102,6 +105,8 @@ start_date = st.date_input("Select start date:").strftime('%Y-%m-%d')
 num_days = st.number_input("Enter number of days:", min_value=1, max_value=365, value=30)
 
 # Vacation input
+enforce_no_back_to_back = st.toggle("Disallow back-to-back junior call days", value=True)
+
 st.subheader("Enter vacation days or date ranges for residents")
 vacation_dict = {}
 specific_requests = {}
@@ -148,6 +153,4 @@ if st.button("Generate Schedule"):
     st.download_button("Download Schedule as CSV", csv_schedule, "neurosurgery_schedule.csv", "text/csv")
 
     csv_counts = counts_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Call Counts as CSV", csv_counts, "call_counts.csv", "text/csv")
-
-
+    st.download_button("Download Call Counts as CSV", csv_counts, "call_counts.csv", "text/csv", enforce_no_back_to_back=enforce_no_back_to_back)
