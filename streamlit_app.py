@@ -214,6 +214,25 @@ if st.button("Generate Schedule"):
         'Weekend': weekend_counts.get(r, 0)
     } for r in set(junior_residents + senior_residents)}
 
-    st.dataframe(pd.DataFrame(all_counts).T)
-    schedule_df.to_csv("call_schedule_output.csv", index=False)
-    st.success("Schedule exported to call_schedule_output.csv")
+    counts_df = pd.DataFrame(all_counts).T
+    st.dataframe(counts_df)
+
+    # Export both as separate CSVs to avoid extra dependencies
+    schedule_csv = schedule_df.to_csv(index=False).encode('utf-8')
+    counts_csv = counts_df.to_csv().encode('utf-8')
+
+    st.download_button(
+        label="📥 Download Schedule (CSV)",
+        data=schedule_csv,
+        file_name='call_schedule.csv',
+        mime='text/csv'
+    )
+
+    st.download_button(
+        label="📥 Download Call Counts (CSV)",
+        data=counts_csv,
+        file_name='call_counts.csv',
+        mime='text/csv'
+    )
+
+    st.success("Schedule and call counts exported as CSV files.")
