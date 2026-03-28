@@ -1,0 +1,91 @@
+{
+  "junior_residents": [
+    "Culjat",
+    "Dagra",
+    "Liebenow",
+    "McGovern",
+    "Negoita"
+  ],
+  "senior_residents": [
+    "Sarathy",
+    "Sorrentino",
+    "Mampre",
+    "Stanton",
+    "Moor",
+    "Obungu",
+    "Smart"
+  ],
+  "night_float": "Dagra",
+  "vacation_dict": {
+    "Culjat": [],
+    "Dagra": [],
+    "Liebenow": [
+      [
+        "2026-05-17",
+        "2026-05-24"
+      ]
+    ],
+    "McGovern": [
+      [
+        "2026-05-09",
+        "2026-05-17"
+      ]
+    ],
+    "Negoita": [],
+    "Sarathy": [],
+    "Sorrentino": [],
+    "Mampre": [
+      [
+        "2026-05-15",
+        "2026-05-21"
+      ]
+    ],
+    "Stanton": [],
+    "Moor": [],
+    "Obungu": [],
+    "Smart": [
+      [
+        "2026-05-08",
+        "2026-05-17"
+      ]
+    ]
+  },
+  "specific_requests": {
+    "Culjat": {
+      "preferred_days": []
+    },
+    "Dagra": {
+      "preferred_days": []
+    },
+    "Liebenow": {
+      "preferred_days": []
+    },
+    "McGovern": {
+      "preferred_days": []
+    },
+    "Negoita": {
+      "preferred_days": []
+    },
+    "Sarathy": {
+      "preferred_days": []
+    },
+    "Sorrentino": {
+      "preferred_days": []
+    },
+    "Mampre": {
+      "preferred_days": []
+    },
+    "Stanton": {
+      "preferred_days": []
+    },
+    "Moor": {
+      "preferred_days": []
+    },
+    "Obungu": {
+      "preferred_days": []
+    },
+    "Smart": {
+      "preferred_days": []
+    }
+  }
+}

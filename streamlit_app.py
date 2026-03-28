@@ -6,7 +6,6 @@ st.write(
 )
 
 # Streamlit-based neurosurgery call schedule app with profile template saving and deletion
-# Streamlit-based neurosurgery call schedule app with profile template saving and deletion
 import streamlit as st
 import pandas as pd
 import random
@@ -90,14 +89,114 @@ def generate_call_schedule(junior_residents, senior_residents, night_float_junio
     return df, junior_counts, senior_counts
 
 # Streamlit UI setup
+PROFILE_PREFIX = "resident_profiles_"
+PROFILE_SUFFIX = ".json"
+
+
+def list_profile_files():
+    return sorted(
+        f for f in os.listdir()
+        if f.startswith(PROFILE_PREFIX) and f.endswith(PROFILE_SUFFIX)
+    )
+
+
+def profile_filename(profile_name: str) -> str:
+    return f"{PROFILE_PREFIX}{profile_name}{PROFILE_SUFFIX}"
+
+
+def serialize_vacation_dict(vacation_dict):
+    serialized = {}
+    for resident, ranges in vacation_dict.items():
+        serialized[resident] = []
+        for start, end in ranges:
+            start_str = start.strftime("%Y-%m-%d") if isinstance(start, (datetime, date)) else str(start)
+            end_str = end.strftime("%Y-%m-%d") if isinstance(end, (datetime, date)) else str(end)
+            serialized[resident].append((start_str, end_str))
+    return serialized
+
+
+def deserialize_vacation_dict(vacation_dict):
+    deserialized = {}
+    for resident, ranges in vacation_dict.items():
+        parsed_ranges = []
+        for start, end in ranges:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date() if isinstance(start, str) else start
+            end_date = datetime.strptime(end, "%Y-%m-%d").date() if isinstance(end, str) else end
+            parsed_ranges.append((start_date, end_date))
+        deserialized[resident] = parsed_ranges
+    return deserialized
+
+
+def vacation_ranges_to_text(ranges):
+    parts = []
+    for start, end in ranges:
+        if isinstance(start, datetime):
+            start = start.date()
+        if isinstance(end, datetime):
+            end = end.date()
+        if start == end:
+            parts.append(start.strftime("%Y-%m-%d"))
+        else:
+            parts.append(f"{start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}")
+    return ", ".join(parts)
+
+
+def apply_profile_to_session(profile_data):
+    junior_list = profile_data.get("junior_residents", [])
+    senior_list = profile_data.get("senior_residents", [])
+    night_float_value = profile_data.get("night_float", "")
+    vacation_data = deserialize_vacation_dict(profile_data.get("vacation_dict", {}))
+    specific_request_data = profile_data.get("specific_requests", {})
+
+    st.session_state["junior_residents_input"] = ", ".join(junior_list)
+    st.session_state["senior_residents_input"] = ", ".join(senior_list)
+    st.session_state["night_float_select"] = night_float_value if night_float_value in junior_list else (junior_list[0] if junior_list else "")
+
+    for resident in junior_list + senior_list:
+        st.session_state[f"vac_range_{resident}"] = ()
+        st.session_state[f"vac_multi_{resident}"] = []
+        st.session_state[f"vac_text_{resident}"] = vacation_ranges_to_text(vacation_data.get(resident, []))
+        preferred_days = specific_request_data.get(resident, {}).get("preferred_days", [])
+        st.session_state[f"pref_{resident}"] = ", ".join(preferred_days)
+
+
 st.title("🧠 Neurosurgery Call Schedule Generator")
 
+# Template controls must come before widgets so loaded values populate the form.
+st.subheader("Resident Profile Templates")
+available_profiles = list_profile_files()
+selected_profile = st.selectbox("Select profile to load:", options=[""] + available_profiles, key="selected_profile")
+
+profile_action_col1, profile_action_col2 = st.columns(2)
+with profile_action_col1:
+    if st.button("Load Resident Profiles") and selected_profile:
+        with open(selected_profile, "r") as f:
+            loaded_profile = json.load(f)
+        apply_profile_to_session(loaded_profile)
+        st.success("Resident profiles loaded.")
+        st.rerun()
+
+with profile_action_col2:
+    if st.button("Delete Selected Profile") and selected_profile:
+        os.remove(selected_profile)
+        st.success(f"Deleted profile: {selected_profile}")
+        st.rerun()
+
 # Inputs
-junior_residents = st.text_area("Junior Residents (comma-separated)").split(',')
-senior_residents = st.text_area("Senior Residents (comma-separated)").split(',')
-night_float = st.selectbox("Select Night Float Junior Resident", junior_residents)
-start_date = st.date_input("Start Date")
-days = st.number_input("Number of Days", 1, 60, 30)
+junior_residents_text = st.text_area("Junior Residents (comma-separated)", key="junior_residents_input")
+senior_residents_text = st.text_area("Senior Residents (comma-separated)", key="senior_residents_input")
+
+junior_residents = [r.strip() for r in junior_residents_text.split(',') if r.strip()]
+senior_residents = [r.strip() for r in senior_residents_text.split(',') if r.strip()]
+
+night_float_options = junior_residents if junior_residents else [""]
+if st.session_state.get("night_float_select", "") not in night_float_options:
+    st.session_state["night_float_select"] = night_float_options[0]
+night_float = st.selectbox("Select Night Float Junior Resident", night_float_options, key="night_float_select")
+
+start_date = st.date_input("Start Date", key="start_date_input")
+days = st.number_input("Number of Days", 1, 60, 30, key="days_input")
+schedule_window_dates = list(pd.date_range(start=start_date, periods=int(days), freq="D").date)
 
 # Vacation dictionary and specific requests
 vacation_dict = {}
@@ -105,33 +204,38 @@ specific_requests = {}
 
 st.subheader("Enter Preferences")
 for resident in junior_residents + senior_residents:
-    with st.expander(f"Preferences for {resident.strip()}"):
+    with st.expander(f"Preferences for {resident}"):
         date_range = st.date_input(
             f"Select a continuous vacation range for {resident}",
             value=(),
-            key=f"vac_range_{resident.strip()}"
+            key=f"vac_range_{resident}"
         )
         calendar_vac = st.multiselect(
             f"Or select individual vacation days for {resident}",
-            options=pd.date_range(start_date, periods=days).to_pydatetime().tolist(),
-            format_func=lambda x: x.strftime("%Y-%m-%d"),
-            key=f"vac_multi_{resident.strip()}"
+            options=schedule_window_dates,
+            default=[d for d in st.session_state.get(f"vac_multi_{resident}", []) if d in schedule_window_dates],
+            key=f"vac_multi_{resident}"
         )
         text_vac = st.text_input(
             f"Or paste additional vacation dates/ranges for {resident} (comma-separated or with 'to')",
-            key=f"vac_text_{resident.strip()}"
+            key=f"vac_text_{resident}"
         )
+
         vacation_ranges = []
-        if isinstance(date_range, tuple) and len(date_range) == 2:
+        if isinstance(date_range, tuple) and len(date_range) == 2 and all(date_range):
             start, end = date_range
-            if isinstance(start, (datetime, date)) and isinstance(end, (datetime, date)):
-                start = start.date() if isinstance(start, datetime) else start
-                end = end.date() if isinstance(end, datetime) else end
-                vacation_ranges.append((start, end))
+            if isinstance(start, datetime):
+                start = start.date()
+            if isinstance(end, datetime):
+                end = end.date()
+            vacation_ranges.append((start, end))
+
         if isinstance(calendar_vac, list):
-            for v in calendar_vac:
-                if isinstance(v, datetime):
-                    vacation_ranges.append((v.date(), v.date()))
+            for vac_day in calendar_vac:
+                if isinstance(vac_day, datetime):
+                    vac_day = vac_day.date()
+                vacation_ranges.append((vac_day, vac_day))
+
         for entry in text_vac.split(','):
             entry = entry.strip()
             if 'to' in entry:
@@ -148,37 +252,24 @@ for resident in junior_residents + senior_residents:
                     vacation_ranges.append((single_date, single_date))
                 except ValueError:
                     continue
-        vacation_dict[resident.strip()] = vacation_ranges
+
+        vacation_dict[resident] = vacation_ranges
 
         preferred = st.text_input(f"Preferred dates on call for {resident}", key=f"pref_{resident}")
         preferred_days = [d.strip() for d in preferred.split(',') if d.strip()]
-        specific_requests[resident.strip()] = {"preferred_days": preferred_days}
+        specific_requests[resident] = {"preferred_days": preferred_days}
 
-st.subheader("Resident Profile Templates")
-profile_name = st.text_input("Profile name:")
-available_profiles = [f for f in os.listdir() if f.startswith("resident_profiles_") and f.endswith(".json")]
-selected_profile = st.selectbox("Select profile to load:", options=available_profiles)
-
-if selected_profile:
-    if st.button("Delete Selected Profile"):
-        os.remove(selected_profile)
-        st.success(f"Deleted profile: {selected_profile}")
-        st.experimental_rerun()
-
-if st.button("Load Resident Profiles") and selected_profile:
-    with open(selected_profile, "r") as f:
-        loaded_profiles = json.load(f)
-        vacation_dict = {k: [(datetime.strptime(s, "%Y-%m-%d"), datetime.strptime(e, "%Y-%m-%d")) for s, e in v] for k, v in loaded_profiles.get("vacation_dict", {}).items()}
-        specific_requests = loaded_profiles.get("specific_requests", {})
-    st.success("Resident profiles loaded.")
-
+profile_name = st.text_input("Profile name:", key="profile_name_input")
 if st.button("Save Resident Profiles") and profile_name:
     profile_data = {
-        "vacation_dict": {k: [(s.strftime('%Y-%m-%d'), e.strftime('%Y-%m-%d')) for s, e in v] for k, v in vacation_dict.items()},
+        "junior_residents": junior_residents,
+        "senior_residents": senior_residents,
+        "night_float": night_float,
+        "vacation_dict": serialize_vacation_dict(vacation_dict),
         "specific_requests": specific_requests
     }
-    with open(f"resident_profiles_{profile_name}.json", "w") as f:
-        json.dump(profile_data, f)
+    with open(profile_filename(profile_name), "w") as f:
+        json.dump(profile_data, f, indent=2)
     st.success(f"Resident profiles saved as '{profile_name}'.")
 
 # Toggle for back-to-back days
@@ -186,11 +277,11 @@ allow_back_to_back = st.checkbox("Allow Junior Residents to take call on consecu
 
 if st.button("Generate Schedule"):
     schedule_df, jr_counts, sr_counts = generate_call_schedule(
-        [j.strip() for j in junior_residents if j.strip()],
-        [s.strip() for s in senior_residents if s.strip()],
+        junior_residents,
+        senior_residents,
         night_float,
         str(start_date),
-        days,
+        int(days),
         vacation_dict,
         specific_requests,
         allow_back_to_back
@@ -202,7 +293,7 @@ if st.button("Generate Schedule"):
     st.subheader("Call Counts")
     weekend_counts = {r: 0 for r in junior_residents + senior_residents}
     weekend_days = [4, 5, 6]
-    for i, row in schedule_df.iterrows():
+    for _, row in schedule_df.iterrows():
         date_obj = datetime.strptime(row['Date'], '%Y-%m-%d')
         if date_obj.weekday() in weekend_days:
             for role in ['Senior Resident (Day & Night)', 'Junior Resident (Day Shift)', 'Junior Resident (Night Shift)']:
